@@ -83,7 +83,7 @@ export default function TodoPage({ params }: { params: { id: number } }) {
   return (
     <div>
       <h1>Todo Details</h1>
-      <h2>Todo ID: {todo.id}</h2>
+      <h2>Todo ID: {todo?.id}</h2>
       <div>
         <label>
           Title:
@@ -96,7 +96,7 @@ export default function TodoPage({ params }: { params: { id: number } }) {
         <button onClick={saveEditTodo}>Save</button>
       </div>
       <div>
-        <p>Status: {todo.completed ? 'Completed' : 'Not Completed'}</p>
+        <p>Status: {todo?.completed ? 'Completed' : 'Not Completed'}</p>
         <button onClick={() => mutationDeleteTodo.mutate(id)}>Delete Todo</button>
       </div>
       <button onClick={() => router.back()}>Go Back</button> {/* Возвращаемся назад */}
