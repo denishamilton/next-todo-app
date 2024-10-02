@@ -1,3 +1,5 @@
+// src/app/api/todos/[id]/route.ts
+
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
@@ -26,16 +28,23 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const id = Number(params.id);
   const body = await req.json();
-  const { title } = body;
 
-  if (!title) {
-    return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+  // Получаем title и completed из тела запроса
+  const { title, completed } = body;
+
+  // Проверяем наличие title и completed, если нужно
+  if (!title && typeof completed !== 'boolean') {
+    return NextResponse.json({ error: 'Title or completed status is required' }, { status: 400 });
   }
 
   try {
+    // Обновляем только предоставленные поля (title или completed)
     const updatedTodo = await prisma.todo.update({
       where: { id },
-      data: { title },
+      data: {
+        ...(title && { title }), // Обновляем title, если он предоставлен
+        ...(typeof completed === 'boolean' && { completed }), // Обновляем completed, если он предоставлен
+      },
     });
 
     return NextResponse.json(updatedTodo, { status: 200 });
@@ -43,6 +52,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: 'Error updating todo' }, { status: 500 });
   }
 }
+
 
 // Удаление задачи по ID
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {

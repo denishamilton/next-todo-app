@@ -1,6 +1,10 @@
+// src/app/todos/[id]/page.tsx
+
 'use client';
-import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation'; // Импортируем хук useRouter для навигации
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface Todo {
   id: number;
@@ -8,58 +12,73 @@ interface Todo {
   completed: boolean;
 }
 
-export default function TodoPage({ params }: { params: { id: string } }) {
-  const [todo, setTodo] = useState<Todo | null>(null);
-  const [editTitle, setEditTitle] = useState('');
-  const router = useRouter(); // Вызов useRouter один раз в теле компонента
+async function fetchTodo(id: number) {
+  const { data } = await axios.get<Todo>(`/api/todos/${id}`);
+  return data;
+}
+
+// Функция для обновления заголовка задачи
+async function updateTodoTitle({ id, title }: { id: number; title: string }) {
+  const { data } = await axios.patch<Todo>(`/api/todos/${id}`, { title });
+  return data;
+}
+
+async function deleteTodo(id: number) {
+  await axios.delete(`/api/todos/${id}`);
+}
+
+export default function TodoPage({ params }: { params: { id: number } }) {
   const { id } = params;
+  const router = useRouter(); // Вызов useRouter один раз в теле компонента
+  const queryClient = useQueryClient();
 
-  // Получение данных о задаче при загрузке страницы
-  useEffect(() => {
-    const fetchTodo = async () => {
-      const res = await fetch(`/api/todos/${id}`);
-      const data = await res.json();
-      setTodo(data);
-      setEditTitle(data.title);
-    };
+  const [editTitle, setEditTitle] = useState('');
 
-    fetchTodo();
-  }, [id]);
+  const { isLoading, error, data: todo } = useQuery({
+    queryKey: ['todo', id],
+    queryFn: () => fetchTodo(id),
+  });
 
-  // Сохранение изменений задачи
-  const saveEditTodo = async () => {
-    const res = await fetch(`/api/todos/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ title: editTitle }),
-    });
-
-    if (res.ok) {
-      const updatedTodo = await res.json();
-      setTodo(updatedTodo);
+  const mutationUpdateTodoTitle = useMutation({
+    mutationFn: updateTodoTitle,
+    onSuccess: () => {
+      // Инвалидируем кэш, чтобы обновить задачу в useQuery
+      queryClient.invalidateQueries({ queryKey: ['todo', id] });
       alert('Todo updated successfully');
-    } else {
+    },
+    onError: () => {
       alert('Failed to update todo');
-    }
-  };
+    },
+  });
 
-  // Удаление задачи
-  const deleteTodo = async () => {
-    const res = await fetch(`/api/todos/${id}`, {
-      method: 'DELETE',
-    });
-
-    if (res.ok) {
-      alert('Todo deleted');
-      router.push('/'); // Используем router.push для навигации после удаления
-    } else {
+  const mutationDeleteTodo = useMutation({
+    mutationFn: deleteTodo,
+    onSuccess: () => {
+      // Инвалидируем кэш, чтобы удалить задачу в useQuery
+      queryClient.invalidateQueries({ queryKey: ['todo', id] });
+      alert('Todo deleted successfully');
+      router.push('/');
+    },
+    onError: () => {
       alert('Failed to delete todo');
+    },
+  });
+
+  // Устанавливаем начальное значение для editTitle, когда загружаем данные задачи
+  useEffect(() => {
+    if (todo) {
+      setEditTitle(todo.title);
     }
+  }, [todo]);
+
+  // Функция для сохранения измененного заголовка
+  const saveEditTodo = () => {
+    mutationUpdateTodoTitle.mutate({ id, title: editTitle });
   };
 
-  if (!todo) return <div>Loading...</div>;
+  // Если данные загружаются или произошла ошибка
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error loading todo</div>;
 
   return (
     <div>
@@ -78,7 +97,7 @@ export default function TodoPage({ params }: { params: { id: string } }) {
       </div>
       <div>
         <p>Status: {todo.completed ? 'Completed' : 'Not Completed'}</p>
-        <button onClick={deleteTodo}>Delete Todo</button>
+        <button onClick={() => mutationDeleteTodo.mutate(id)}>Delete Todo</button>
       </div>
       <button onClick={() => router.back()}>Go Back</button> {/* Возвращаемся назад */}
     </div>
